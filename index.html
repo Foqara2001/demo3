@@ -75,9 +75,17 @@
     <section id="tracker-page" class="page">
         <div class="container">
             <h2 class="page-title">المتابعة اليومية</h2>
-            <div class="calendar-container">
-                <div id="calendar" class="calendar-grid"></div>
-            </div>
+           <div class="calendar-controls">
+            <button id="prev-month" class="month-nav-btn">
+            <i class="fas fa-chevron-right"></i>
+            </button>
+            <h3 id="current-month-year"></h3>
+            <button id="next-month" class="month-nav-btn">
+            <i class="fas fa-chevron-left"></i>
+            </button>
+        </div>
+         <div id="calendar" class="calendar-grid"></div>
+         </div>
             
             <!-- نافذة متابعة اليوم -->
 <div id="tracker-container" class="tracker-modal">
@@ -267,6 +275,17 @@
     </section>
 
     <section id="profile-page" class="page">
+          <div id="profile-loading-overlay" class="loading-overlay" style="display: none;">
+          <div class="loading-content">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <p class="loading-text">جاري تحميل البيانات...</p>
+            <div class="progress-bar">
+                <div class="progress"></div>
+            </div>
+        </div>
+        </div>
         <div class="container">
           <div class="profile-header">
             <div class="avatar-large" id="profile-avatar-large"></div>
@@ -298,14 +317,27 @@
           <div class="progress-calendar">
             <h3>التقدم الشهري</h3>
             <div class="calendar-legend">
-              <div><span class="legend-dot full"></span> يوم مكتمل</div>
-              <div><span class="legend-dot partial"></span> يوم جزئي</div>
-              <div><span class="legend-dot none"></span> يوم غير مكتمل</div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #10b981;"></div>
+                    <span>يوم مكتمل</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #f59e0b;"></div>
+                    <span>يوم جزئي</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #93c5fd;"></div>
+                    <span>تقدم بسيط</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #f3f4f6;"></div>
+                    <span>لا يوجد تقدم</span>
+                </div>
             </div>
             <div class="calendar-grid" id="profile-calendar"></div>
-          </div>
         </div>
-      </section>
+    </div>
+</section>
 
     <!-- صفحة لوحة التحكم الإدارية -->
     <section id="admin-page" class="page">
@@ -439,5 +471,6 @@
     <script src="admin.js"></script>
     <script src="script.js"></script>
     <script src="resources.json"></script>
+    
 </body>
 </html>
