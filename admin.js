@@ -102,121 +102,190 @@ async function loadAdminPage() {
 }
 
 async function loadUserProgress() {
-  try {
-    const filter = document.getElementById('progress-filter')?.value || 'all';
-    const usersSnapshot = await database.ref('users').once('value');
-    
-    const users = usersSnapshot.val() || {};
-    const container = document.getElementById('user-progress-container');
-    if (!container) return;
-    
-    container.innerHTML = `
-      <div class="progress-header">
-        <span>المستخدم</span>
-        <span>الأيام</span>
-        <span>الصلوات</span>
+    try {
+        const filter = document.getElementById('progress-filter')?.value || 'all';
+        const usersSnapshot = await database.ref('users').once('value');
         
-        <span>التفاصيل</span>
-      </div>
-    `;
-    
-    for (const [uid, user] of Object.entries(users)) {
-      if (user.isAdmin) continue;
-      
-      const trackerSnap = await database.ref(`users/${uid}/tracker`).once('value');
-      const trackerData = trackerSnap.val() || {};
-      
-      const daysCompleted = Object.values(trackerData).filter(day => 
-        day.fajr && day.dhuhr && day.asr && day.maghrib && day.isha && day.juz
-      ).length;
-      
-      const prayersCompleted = Object.values(trackerData).reduce((total, day) => 
-        total + (day.fajr ? 1 : 0) + (day.dhuhr ? 1 : 0) + (day.asr ? 1 : 0) + 
-        (day.maghrib ? 1 : 0) + (day.isha ? 1 : 0), 0);
-      
-      const juzCompleted = Object.values(trackerData).reduce((total, day) => 
-        total + (day.juz ? 1 : 0), 0);
-      
-      // Apply filters
-      if (filter === 'active' && daysCompleted === 0) continue;
-      if (filter === 'inactive' && daysCompleted > 0) continue;
-      
-      const progressRow = document.createElement('div');
-      progressRow.className = 'progress-row';
-      progressRow.innerHTML = `
-        <span>${user.username || user.email}</span>
-        <span>${daysCompleted}/30</span>
-        <span>${prayersCompleted}</span>
+        const users = usersSnapshot.val() || {};
+        const container = document.getElementById('user-progress-container');
+        if (!container) return;
         
-        <button onclick="viewUserDetails('${uid}')" class="details-btn">عرض</button>
-      `;
-      container.appendChild(progressRow);
+        container.innerHTML = `
+            <div class="progress-header">
+                <span>المستخدم</span>
+                <span>الأيام المكتملة</span>
+                <span>الصلوات</span>
+                <span>آخر نشاط</span>
+                <span>التفاصيل</span>
+            </div>
+        `;
+        
+        for (const [uid, user] of Object.entries(users)) {
+            if (user.isAdmin) continue;
+            
+            let userCompletedDays = 0;
+            let userTotalPrayers = 0;
+            let lastActiveDate = 'غير نشط';
+            
+            // حساب الإحصائيات عبر جميع الأشهر
+            const trackerSnap = await database.ref(`users/${uid}/tracker`).once('value');
+            const trackerData = trackerSnap.val() || {};
+            
+            for (const year in trackerData) {
+                for (const month in trackerData[year]) {
+                    const days = trackerData[year][month];
+                    
+                    for (const dayKey in days) {
+                        const dayData = days[dayKey];
+                        const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+                        
+                        // حساب الصلوات
+                        const dayPrayers = prayers.filter(p => dayData[p]).length;
+                        userTotalPrayers += dayPrayers;
+                        
+                        // حساب الأيام المكتملة
+                        if (prayers.every(p => dayData[p])) {
+                            userCompletedDays++;
+                            
+                            // تحديث آخر تاريخ نشاط
+                            const activityDate = new Date(year, month, dayKey.replace('day', ''));
+                            lastActiveDate = activityDate.toLocaleDateString('ar-EG');
+                        }
+                    }
+                }
+            }
+            
+            // تطبيق الفلاتر
+            if (filter === 'active' && userCompletedDays === 0) continue;
+            if (filter === 'inactive' && userCompletedDays > 0) continue;
+            
+            const progressRow = document.createElement('div');
+            progressRow.className = 'progress-row';
+            progressRow.innerHTML = `
+                <span>${user.username || user.email}</span>
+                <span>${userCompletedDays}</span>
+                <span>${userTotalPrayers}</span>
+                <span>${lastActiveDate}</span>
+                <button onclick="viewUserDetails('${uid}')" class="details-btn">عرض</button>
+            `;
+            container.appendChild(progressRow);
+        }
+        
+    } catch (error) {
+        console.error('Error loading user progress:', error);
+        showMessage('حدث خطأ في تحميل تقدم المستخدمين', 'error');
     }
-    
-  } catch (error) {
-    console.error('Error loading user progress:', error);
-    showMessage('حدث خطأ في تحميل تقدم المستخدمين', 'error');
-  }
 }
 
 async function loadGlobalStats() {
-  try {
-    const usersSnapshot = await database.ref('users').once('value');
-    const users = usersSnapshot.val() || {};
-    
-    let totalDays = 0;
-    let totalPrayers = 0;
-    let totalJuz = 0;
-    let activeUsers = 0;
-    
-    for (const [uid, user] of Object.entries(users)) {
-      if (user.isAdmin) continue;
-      
-      const trackerSnap = await database.ref(`users/${uid}/tracker`).once('value');
-      const trackerData = trackerSnap.val() || {};
-      const daysData = Object.values(trackerData);
-      
-      const userDaysCompleted = daysData.filter(day => 
-        day.fajr && day.dhuhr && day.asr && day.maghrib && day.isha && day.juz
-      ).length;
-      
-      if (userDaysCompleted > 0) activeUsers++;
-      
-      totalDays += userDaysCompleted;
-      totalPrayers += daysData.reduce((sum, day) => 
-        sum + (day.fajr ? 1 : 0) + (day.dhuhr ? 1 : 0) + (day.asr ? 1 : 0) + 
-        (day.maghrib ? 1 : 0) + (day.isha ? 1 : 0), 0);
-      
-      totalJuz += daysData.reduce((sum, day) => sum + (day.juz ? 1 : 0), 0);
+    try {
+        const usersSnapshot = await database.ref('users').once('value');
+        const users = usersSnapshot.val() || {};
+        
+        let stats = {
+            totalUsers: 0,
+            activeUsers: 0,
+            totalPrayers: 0,
+            totalCompletedDays: 0,
+            monthlyTrend: []
+        };
+        
+        // حساب إحصائيات جميع المستخدمين
+        for (const [uid, user] of Object.entries(users)) {
+            if (user.isAdmin) continue;
+            
+            stats.totalUsers++;
+            let isActive = false;
+            
+            const trackerSnap = await database.ref(`users/${uid}/tracker`).once('value');
+            const trackerData = trackerSnap.val() || {};
+            
+            // حساب الإحصائيات لكل شهر
+            for (const year in trackerData) {
+                for (const month in trackerData[year]) {
+                    const monthKey = `${year}-${month.padStart(2, '0')}`;
+                    let monthStats = stats.monthlyTrend.find(m => m.month === monthKey);
+                    
+                    if (!monthStats) {
+                        monthStats = {
+                            month: monthKey,
+                            name: new Date(year, month, 1).toLocaleString('ar-EG', {month: 'long', year: 'numeric'}),
+                            prayers: 0,
+                            completedDays: 0,
+                            users: 0
+                        };
+                        stats.monthlyTrend.push(monthStats);
+                    }
+                    
+                    const days = trackerData[year][month];
+                    let hasActivity = false;
+                    
+                    for (const day in days) {
+                        const dayData = days[day];
+                        const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+                        const dayPrayers = prayers.filter(p => dayData[p]).length;
+                        
+                        stats.totalPrayers += dayPrayers;
+                        monthStats.prayers += dayPrayers;
+                        
+                        if (dayPrayers > 0) hasActivity = true;
+                        if (prayers.every(p => dayData[p])) {
+                            stats.totalCompletedDays++;
+                            monthStats.completedDays++;
+                        }
+                    }
+                    
+                    if (hasActivity) {
+                        monthStats.users++;
+                        isActive = true;
+                    }
+                }
+            }
+            
+            if (isActive) stats.activeUsers++;
+        }
+        
+        // ترتيب الأشهر وتحديد آخر 6 أشهر
+        stats.monthlyTrend.sort((a, b) => b.month.localeCompare(a.month));
+        const recentMonths = stats.monthlyTrend.slice(0, 6);
+        
+        // عرض الإحصائيات
+        const globalStats = document.getElementById('global-stats');
+        if (globalStats) {
+            globalStats.innerHTML = `
+                <div class="stat-card">
+                    <h4>إجمالي المستخدمين</h4>
+                    <p>${stats.totalUsers}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>المستخدمون النشطون</h4>
+                    <p>${stats.activeUsers}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>إجمالي الأيام المكتملة</h4>
+                    <p>${stats.totalCompletedDays}</p>
+                </div>
+                <div class="stat-card">
+                    <h4>إجمالي الصلوات</h4>
+                    <p>${stats.totalPrayers}</p>
+                </div>
+                <div class="stat-card chart-container">
+                    <h4>اتجاه الصلوات</h4>
+                    <div class="stats-chart">
+                        ${recentMonths.map(m => `
+                            <div class="chart-bar" style="height: ${Math.min(100, m.prayers / 100)}%">
+                                <span>${m.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+    } catch (error) {
+        console.error('Error loading global stats:', error);
+        showMessage('حدث خطأ في تحميل الإحصائيات العامة', 'error');
     }
-    
-    const globalStats = document.getElementById('global-stats');
-    if (globalStats) {
-      globalStats.innerHTML = `
-        <div class="stat-card">
-          <h4>إجمالي المستخدمين</h4>
-          <p>${Object.keys(users).filter(uid => !users[uid].isAdmin).length}</p>
-        </div>
-        <div class="stat-card">
-          <h4>المستخدمون النشطون</h4>
-          <p>${activeUsers}</p>
-        </div>
-        <div class="stat-card">
-          <h4>إجمالي الأيام المكتملة</h4>
-          <p>${totalDays}</p>
-        </div>
-        <div class="stat-card">
-          <h4>إجمالي الصلوات</h4>
-          <p>${totalPrayers}</p>
-        </div>
-       
-      `;
-    }
-    
-  } catch (error) {
-    console.error('Error loading global stats:', error);
-    showMessage('حدث خطأ في تحميل الإحصائيات العامة', 'error');
-  }
 }
 
 async function searchUsers() {
@@ -266,66 +335,117 @@ async function searchUsers() {
 }
 
 async function viewUserDetails(userId) {
-  try {
-    const [userData, trackerData] = await Promise.all([
-      database.ref(`users/${userId}`).once('value'),
-      database.ref(`users/${userId}/tracker`).once('value')
-    ]);
-    
-    const user = userData.val();
-    const tracker = trackerData.val() || {};
-    
-    const modalContent = `
-      <div class="user-details-modal">
-        <div class="modal-header">
-          <h2>تفاصيل المستخدم</h2>
-          <button class="close-modal-btn" onclick="closeModal()">&times;</button>
-        </div>
+    try {
+        const [userData, trackerData] = await Promise.all([
+            database.ref(`users/${userId}`).once('value'),
+            database.ref(`users/${userId}/tracker`).once('value')
+        ]);
         
-        <div class="user-profile">
-          <div class="avatar">${(user.username || user.email).charAt(0).toUpperCase()}</div>
-          <div>
-            <h3>${user.username || user.email}</h3>
-            <p>${user.email}</p>
-            <p>تاريخ التسجيل: ${user.joinDate || 'غير معروف'}</p>
-          </div>
-        </div>
+        const user = userData.val();
+        const tracker = trackerData.val() || {};
         
-        <div class="user-stats-grid">
-          <!-- ... إحصائيات المستخدم ... -->
-        </div>
+        // إنشاء محتوى تفاصيل المستخدم
+        let calendarContent = '';
+        let monthlyStats = '';
         
-        <div class="progress-container">
-          <h3>التقدم اليومي</h3>
-          <div class="progress-calendar">
-            ${Array.from({length: 30}, (_, i) => {
-              const day = i + 1;
-              const dayData = tracker[`day${day}`] || {};
-              const isComplete = dayData.fajr && dayData.dhuhr && dayData.asr &&
-                              dayData.maghrib && dayData.isha && dayData.juz;
-              return `<div class="calendar-day ${isComplete ? 'completed' : ''}">${day}</div>`;
-            }).join('')}
-          </div>
-        </div>
-      </div>
-    `;
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = modalContent;
-    document.body.appendChild(modal);
-    
-    // إضافة حدث للنقر خارج المحتوى لإغلاق النافذة
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        closeModal();
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error viewing user details:', error);
-    showMessage('حدث خطأ في تحميل تفاصيل المستخدم', 'error');
-  }
+        // تنظيم البيانات حسب الأشهر
+        const monthsData = [];
+        for (const year in tracker) {
+            for (const month in tracker[year]) {
+                const monthKey = `${year}-${month.padStart(2, '0')}`;
+                monthsData.push({
+                    year,
+                    month,
+                    days: tracker[year][month],
+                    monthKey
+                });
+            }
+        }
+        
+        // ترتيب الأشهر من الأحدث للأقدم
+        monthsData.sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+        
+        // عرض إحصائيات شهرية
+        monthlyStats = '<div class="monthly-stats-container">';
+        monthsData.slice(0, 6).forEach(({year, month, days}) => {
+            const monthName = new Date(year, month, 1).toLocaleString('ar-EG', {month: 'long'});
+            let completedDays = 0;
+            let totalPrayers = 0;
+            
+            for (const day in days) {
+                const dayData = days[day];
+                const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+                totalPrayers += prayers.filter(p => dayData[p]).length;
+                if (prayers.every(p => dayData[p])) completedDays++;
+            }
+            
+            monthlyStats += `
+                <div class="month-stat-card">
+                    <h4>${monthName} ${year}</h4>
+                    <p>الأيام المكتملة: ${completedDays}</p>
+                    <p>إجمالي الصلوات: ${totalPrayers}</p>
+                </div>
+            `;
+        });
+        monthlyStats += '</div>';
+        
+        // إنشاء تقويم آخر شهر نشط
+        if (monthsData.length > 0) {
+            const lastActive = monthsData[0];
+            const daysInMonth = new Date(lastActive.year, lastActive.month, 0).getDate();
+            
+            calendarContent = '<div class="user-calendar-grid">';
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayKey = `day${day}`;
+                const dayData = lastActive.days[dayKey] || {};
+                const isComplete = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].every(p => dayData[p]);
+                
+                calendarContent += `
+                    <div class="user-calendar-day ${isComplete ? 'completed' : ''}">
+                        ${day}
+                    </div>
+                `;
+            }
+            calendarContent += '</div>';
+        }
+        
+        // عرض النافذة
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="user-details-modal">
+                <div class="modal-header">
+                    <h2>تفاصيل المستخدم</h2>
+                    <button class="close-modal-btn" onclick="closeModal()">&times;</button>
+                </div>
+                
+                <div class="user-profile">
+                    <div class="avatar">${(user.username || user.email).charAt(0).toUpperCase()}</div>
+                    <div>
+                        <h3>${user.username || user.email}</h3>
+                        <p>${user.email}</p>
+                        <p>تاريخ التسجيل: ${user.joinDate || 'غير معروف'}</p>
+                    </div>
+                </div>
+                
+                <div class="user-stats-section">
+                    <h3>إحصائيات الشهور الأخيرة</h3>
+                    ${monthlyStats}
+                </div>
+                
+                <div class="user-calendar-section">
+                    <h3>آخر شهر نشط</h3>
+                    ${calendarContent || '<p>لا يوجد بيانات متاحة</p>'}
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        console.error('Error viewing user details:', error);
+        showMessage('حدث خطأ في تحميل تفاصيل المستخدم', 'error');
+    }
 }
 
 async function addResource() {
